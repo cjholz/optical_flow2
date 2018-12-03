@@ -83,6 +83,7 @@ public class MainActivity extends AppCompatActivity implements CameraBridgeViewB
     @Override
     public Mat onCameraFrame(CameraBridgeViewBase.CvCameraViewFrame inputFrame) {
         Mat gray = inputFrame.gray();
+        Mat rgb = inputFrame.rgba();
         MatOfPoint2f nextPts = new MatOfPoint2f();
         MatOfByte status = new MatOfByte();
         MatOfFloat err = new MatOfFloat();
@@ -91,12 +92,12 @@ public class MainActivity extends AppCompatActivity implements CameraBridgeViewB
         }
 
         for (int i=0; i < nextPts.toList().size(); i++) {
-            Imgproc.line(gray, prevPts.toList().get(i), nextPts.toList().get(i), new Scalar(0,0,255), 2);
+            Imgproc.line(rgb, prevPts.toList().get(i), nextPts.toList().get(i), new Scalar(255,0,0), 2);
         }
         previousFrame = inputFrame.gray();
         MatOfPoint points = new MatOfPoint();
         Imgproc.goodFeaturesToTrack(previousFrame, points, 100, .01, 50);
         prevPts.fromArray(points.toArray());
-        return gray;
+        return rgb;
     }
 }
