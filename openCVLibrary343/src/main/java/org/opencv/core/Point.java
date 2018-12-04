@@ -65,4 +65,7 @@ public class Point {
     public String toString() {
         return "{" + x + ", " + y + "}";
     }
+    public Point subtract(Point other) {
+        return new Point(this.x-other.x, this.y-other.y);
+    }
 }
