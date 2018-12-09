@@ -83,6 +83,9 @@ public class MainActivity extends AppCompatActivity implements CameraBridgeViewB
     }
 
     public Point getCentroid(Point[] points){
+        if(points.length == 0) {
+            return new Point();
+        }
         int sumx = 0;
         int sumy = 0;
         for(int i = 0; i<points.length;i++){
@@ -117,9 +120,6 @@ public class MainActivity extends AppCompatActivity implements CameraBridgeViewB
         if (previousFrame != null) {
             calcOpticalFlowPyrLK(previousFrame, gray, centerPts, nextPts, status, err);
         }
-
-        // get centroid to pass into calculation
-        Point center = getCentroid(prevPts.toArray());
         
         // Drawing lines so we know something
         for (int i=0; i < nextPts.toList().size(); i++) {
@@ -133,7 +133,8 @@ public class MainActivity extends AppCompatActivity implements CameraBridgeViewB
         Imgproc.goodFeaturesToTrack(previousFrame, points, 25, .01, 50);
         prevPts.fromArray(points.toArray());
 
-
+        // get centroid to pass into calculation
+        center = getCentroid(prevPts.toArray());
 
 
         return rgb;
