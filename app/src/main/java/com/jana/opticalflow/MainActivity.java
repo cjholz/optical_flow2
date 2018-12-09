@@ -18,7 +18,11 @@ import org.opencv.core.MatOfPoint;
 import org.opencv.core.MatOfPoint2f;
 import org.opencv.core.Point;
 import org.opencv.core.Scalar;
+import org.opencv.core.Size;
 import org.opencv.imgproc.Imgproc;
+
+import java.util.ArrayList;
+
 import static org.opencv.video.Video.calcOpticalFlowPyrLK;
 
 
@@ -27,6 +31,11 @@ public class MainActivity extends AppCompatActivity implements CameraBridgeViewB
     private Mat previousFrame;
     private MatOfPoint2f prevPts;
     private long prevFrameTime;
+    private ArrayList<Double> xvels;
+    private ArrayList<Double> yvels;
+    //private ArrayList<Double> xcenters;
+    //private ArrayList<Double> ycenters;
+
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -47,6 +56,10 @@ public class MainActivity extends AppCompatActivity implements CameraBridgeViewB
             cameraView.enableView();
         }
         prevPts = new MatOfPoint2f();
+        xvels = new ArrayList<>();
+        yvels = new ArrayList<>();
+        //xcenters = new ArrayList<>();
+        //ycenters = new ArrayList<>();
     }
 
     @Override
@@ -76,7 +89,7 @@ public class MainActivity extends AppCompatActivity implements CameraBridgeViewB
     @Override
     public Mat onCameraFrame(CameraBridgeViewBase.CvCameraViewFrame inputFrame) {
         long time = System.currentTimeMillis();
-        long timeDiff = (time - prevFrameTime)/1000;
+        double timeDiff = (time - prevFrameTime)/1000.;
         prevFrameTime = time;
         Mat gray = inputFrame.gray();
         Mat rgb = inputFrame.rgba();
@@ -84,7 +97,7 @@ public class MainActivity extends AppCompatActivity implements CameraBridgeViewB
         MatOfByte status = new MatOfByte();
         MatOfFloat err = new MatOfFloat();
         if (previousFrame != null) {
-            calcOpticalFlowPyrLK(previousFrame, gray, prevPts, nextPts, status, err);
+            calcOpticalFlowPyrLK(previousFrame, gray, prevPts, nextPts, status, err, new Size(3, 3), 2);
         }
 
         double totalx = 0;
@@ -110,12 +123,38 @@ public class MainActivity extends AppCompatActivity implements CameraBridgeViewB
         double displacey = totaldisplacey/numFound;
         double centerx = totalx/numFound;
         double centery = totaly/numFound;
-        double xvel = (.1/rgb.rows()) * totalvelx/numFound;
-        double yvel = (.1/rgb.rows()) * totalvely/numFound;
+        double xvelp = totalvelx/numFound;
+        double yvelp = totalvely/numFound;
+        double xvel = (3./rgb.cols()) * xvelp;
+        double yvel = (2./rgb.rows()) * yvelp;
+        if (xvels.size() >= 5) {
+            xvels.remove(0);
+            yvels.remove(0);
+            //xcenters.remove(0);
+            //ycenters.remove(0);
+        }
+        xvels.add(xvel);
+        yvels.add(yvel);
+        //xcenters.add(centerx);
+        //ycenters.add(centery);
+        xvel = 0;
+        yvel = 0;
+        //centerx = 0;
+        //centery = 0;
+        for(int i=0; i<xvels.size(); i++){
+            xvel += xvels.get(i);
+            yvel += yvels.get(i);
+            //centerx += xcenters.get(i);
+            //centery += ycenters.get(i);
+        }
+        xvel = xvel/5.;
+        yvel = yvel/5.;
+        //centerx = centerx/5.;
+        //centery = centery/5.;
 
         double magn = Math.sqrt(Math.pow(xvel, 2) + Math.pow(yvel, 2));
         //TODO:Smoothing
-        if (magn > .005) {
+        if (magn > 0.05) {
             Imgproc.arrowedLine(rgb, new Point(centerx, centery), new Point(centerx + displacex, centery + displacey), new Scalar(255, 0, 0), 10);
         }
         else {
