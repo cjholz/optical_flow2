@@ -21,13 +21,7 @@ import org.opencv.core.Point;
 import org.opencv.core.Scalar;
 import org.opencv.core.Size;
 import org.opencv.imgproc.Imgproc;
-import org.opencv.features2d.GFTTDetector;
 
-// import static org.opencv.video.Video.OPTFLOW_FARNEBACK_GAUSSIAN;
-// import static org.opencv.video.Video.OPTFLOW_USE_INITIAL_FLOW;
-// import static org.opencv.video.Video.calcOpticalFlowFarneback;
-import java.util.ArrayList;
-import java.util.Random;
 
 import static org.opencv.video.Video.calcOpticalFlowPyrLK;
 
@@ -47,8 +41,10 @@ public class MainActivity extends AppCompatActivity implements CameraBridgeViewB
     private long prevFrameTime;
     private ArrayList<Double> xvels;
     private ArrayList<Double> yvels;
-    //private ArrayList<Double> xcenters;
-    //private ArrayList<Double> ycenters;
+    double realx;
+    double realy;
+    int frameheight = 1080;
+    int framewidth = 1440;
 
 
     @Override
@@ -73,8 +69,16 @@ public class MainActivity extends AppCompatActivity implements CameraBridgeViewB
         center = new Point();
         xvels = new ArrayList<>();
         yvels = new ArrayList<>();
-        //xcenters = new ArrayList<>();
-        //ycenters = new ArrayList<>();
+
+        //Calculate FOV at walking distance
+        double realZ = 12.8444422;
+        //Calculate diagonal in walking plane
+        double diag = (Math.tan(.658)*realZ)*2;
+        //Calculate angle of diagonal with x-axis
+        double cornerAng = Math.atan((double)frameheight/framewidth);
+        //Calculate x and y dimensions in walking plane
+        realx = Math.cos(cornerAng)*diag;
+        realy = Math.sin(cornerAng)*diag;
     }
 
     @Override
@@ -123,100 +127,65 @@ public class MainActivity extends AppCompatActivity implements CameraBridgeViewB
         Mat gray = inputFrame.gray();
         Mat rgb = inputFrame.rgba();
         MatOfPoint2f nextPts = new MatOfPoint2f();
-        /*MatOfPoint2f centerPts = new MatOfPoint2f();
-        ArrayList<Point> centerList = new ArrayList<Point>();
-        centerList.add(center);
-        Random rand = new Random();
-        for (int i=0; i<20; i++) {
-            double rad = rand.nextDouble()*20;
-            double rad1 = rand.nextDouble()*20;
-            if (rad > 10) {
-                rad = -rad/2;
-            }
-            if (rad1 > 10) {
-                rad1 = -rad1/2;
-            }
-            double newx = center.x+rad;
-            double newy = center.y+rad1;
-            centerList.add(new Point(newx, newy));
-
-        }
-        centerPts.fromList(centerList);*/
         MatOfByte status = new MatOfByte();
         MatOfFloat err = new MatOfFloat();
         if (previousFrame != null) {
             calcOpticalFlowPyrLK(previousFrame, gray, prevPts, nextPts, status, err, new Size(21, 21), 2);
 
-            double totalx = 0;
-            double totaly = 0;
-            double totalvelx = 0;
-            double totalvely = 0;
-            double totaldisplacex = 0;
-            double totaldisplacey = 0;
-            int numFound = 0;
+            //Calculate and select maximum displacement
             double maxdis = 0;
             int maxdisind = 0;
-            //TODO:choose largest displacement
             for (int i = 0; i < nextPts.toList().size(); i++) {
                 if (status.toList().get(i) == 1) {
-                    totalx += nextPts.toArray()[i].x;
-                    totaly += nextPts.toArray()[i].y;
                     Point displacement = prevPts.toArray()[i].subtract(nextPts.toArray()[i]);
                     double displacementmag = Math.sqrt(Math.pow(displacement.x, 2) + Math.pow(displacement.y, 2));
                     if (displacementmag > maxdis) {
                         maxdis = displacementmag;
                         maxdisind = i;
                     }
-                    totalvelx += displacement.x / timeDiff;
-                    totalvely += displacement.y / timeDiff;
-                    totaldisplacex += displacement.x;
-                    totaldisplacey += displacement.y;
-                    numFound++;
                 }
             }
+            //Calculate velocity for the maximum displacement
             Point displacement = nextPts.toArray()[maxdisind].subtract(prevPts.toArray()[maxdisind]);
-            double displacex = displacement.x;//totaldisplacex/numFound;
-            double displacey = displacement.y;//totaldisplacey/numFound;
-            double centerx = nextPts.toArray()[maxdisind].x;//totalx/numFound;
-            double centery = nextPts.toArray()[maxdisind].y;//totaly/numFound;
-            double xvelp = displacex / timeDiff;//totalvelx/numFound;
-            double yvelp = displacey / timeDiff;//totalvely/numFound;
-            double xvel = (3. / rgb.cols()) * xvelp;
-            double yvel = (2. / rgb.rows()) * yvelp;
+            double displacex = displacement.x;
+            double displacey = displacement.y;
+            double centerx = nextPts.toArray()[maxdisind].x;
+            double centery = nextPts.toArray()[maxdisind].y;
+            double xvelp = displacex / timeDiff;
+            double yvelp = displacey / timeDiff;
+
+            //Convert pixel velocity to m/s
+            double xvel = (realx / rgb.cols()) * xvelp;
+            double yvel = (realy / rgb.rows()) * yvelp;
+
+            //Smooth velocity over WINDOW_SIZE
             if (xvels.size() >= 5) {
                 xvels.remove(0);
                 yvels.remove(0);
-                //xcenters.remove(0);
-                //ycenters.remove(0);
             }
             xvels.add(xvel);
             yvels.add(yvel);
-            //xcenters.add(centerx);
-            //ycenters.add(centery);
             xvel = 0;
             yvel = 0;
-            //centerx = 0;
-            //centery = 0;
             for (int i = 0; i < xvels.size(); i++) {
                 xvel += xvels.get(i);
                 yvel += yvels.get(i);
-                //centerx += xcenters.get(i);
-                //centery += ycenters.get(i);
             }
             xvel = xvel / 5.;
             yvel = yvel / 5.;
-            //centerx = centerx/5.;
-            //centery = centery/5.;
 
+            //Determine if velocity is above the threshold and draw displacement vector and velocity meter
             double magn = Math.sqrt(Math.pow(xvel, 2) + Math.pow(yvel, 2));
             if (magn > 0.05) {
-                Imgproc.arrowedLine(rgb, new Point(centerx, centery), new Point(centerx + displacex, centery + displacey), new Scalar(255, 0, 0), 10);
+                Imgproc.arrowedLine(rgb, new Point(centerx, centery), new Point(centerx + displacex, centery + displacey), new Scalar(255, 0, 0), 20);
+                Imgproc.line(rgb, new Point(rgb.width()/2, rgb.height()-50), new Point(rgb.width()/2 + xvel*100, rgb.height()-50), new Scalar(255, 255, 0), 50);
             } else {
                 xvel = 0;
                 yvel = 0;
             }
-            Imgproc.putText(rgb, "XVEL" + String.valueOf(xvel) + "m/s", new Point(30, 50), Core.FONT_HERSHEY_PLAIN, 5.0, new Scalar(0, 0, 255));
-            Imgproc.putText(rgb, "YVEL" + String.valueOf(yvel) + "m/s", new Point(30, 100), Core.FONT_HERSHEY_PLAIN, 5.0, new Scalar(0, 0, 255));
+            //Draw velocity values with text
+            Imgproc.putText(rgb, "XVEL" + String.valueOf(xvel) + "m/s", new Point(30, 75), Core.FONT_HERSHEY_PLAIN, 5.0, new Scalar(255, 255, 0), Imgproc.LINE_8);
+            Imgproc.putText(rgb, "YVEL" + String.valueOf(yvel) + "m/s", new Point(30, 150), Core.FONT_HERSHEY_PLAIN, 5.0, new Scalar(255, 255, 0), Imgproc.LINE_8);
         }
 
         previousFrame = inputFrame.gray();
@@ -229,7 +198,7 @@ public class MainActivity extends AppCompatActivity implements CameraBridgeViewB
         prevPts.fromArray(points.toArray());
 
         // get centroid to pass into calculation
-        center = getCentroid(prevPts.toArray());
+        //center = getCentroid(prevPts.toArray());
 
 
         return rgb;
